@@ -1,4 +1,5 @@
-# address_label
+# Personal Address Label Generator
 
-this is a script to generate a pdf for Avery sticky address labels
-this script is made specifically for my addresses excel spreadsheet
+This is a personal script designed to generate PDFs of address labels formatted for Avery sticky label sheets.
+
+It is tailored to work with my specific address data, which can be in either CSV or Microsoft Excel format. The script reads the address information, allows for filtering of specific addresses, and then creates a printable PDF file.
