@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 
 import argparse
+import webbrowser
 from pandas import DataFrame, read_excel, read_csv
 from pathlib import Path
 from pylabels import Sheet, Specification
@@ -8,7 +9,7 @@ from collections import namedtuple
 from reportlab.graphics import shapes
 
 
-def get_args() -> object:
+def get_args(defaults: bool = False) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="address_label",
         description="Creates a pdf for printing address labels",
@@ -17,7 +18,11 @@ def get_args() -> object:
     parser.add_argument("-o", "--output", default="labels.pdf")
     parser.add_argument("-f", "--filter", default="*", help="Ex: 'mary joe, 4-9, !5'")
     parser.add_argument("-b", "--bias", type=int, default=0, help="Count of labels to offset")
-    parser.add_argument("-r", "--return", action="store_true", help="Include the same number of return address labels")
+    parser.add_argument("-r", "--ret", action="store_true", help="Include the same number of return address labels")
+    parser.add_argument("-t", "--test", action="store_true", help="Put box lines around each lablel")
+    parser.add_argument("-l", "--launch", action="store_true", help="Launch the pdf in the browser")
+    if defaults:
+        return parser.parse_args([])
     return parser.parse_args()
 
 
@@ -107,14 +112,15 @@ def get_dataframe(input_path: str) -> (DataFrame, int):
         raise ValueError(f"Unsupported file type: {path.suffix}. Please use .csv, .xls, or .xlsx files.")
 
 
-def get_sheet() -> Sheet:
+def get_sheet(test: bool) -> Sheet:
     PADDING = 1
     specs = Specification(
         215.9,
         279.4,
         3,
         10,
-        64,
+        # 64,
+        66.7,
         25.4,
         corner_radius=2,
         left_margin=5,
@@ -127,8 +133,9 @@ def get_sheet() -> Sheet:
         row_gap=0,
     )
 
-    return Sheet(specs, draw_address, border=True)
-    # return Sheet(specs, draw_address)
+    if test:
+        return Sheet(specs, draw_address, border=True)
+    return Sheet(specs, draw_address)
 
 
 Address = namedtuple(
@@ -136,7 +143,7 @@ Address = namedtuple(
 )
 
 
-def draw_address(label, width, height, address: Address | None) -> None:
+def draw_address(label, width, height, address: Address | None):
     # If the address is None, we do nothing, resulting in a blank label.
     if address is None:
         return
@@ -179,7 +186,7 @@ def draw_address(label, width, height, address: Address | None) -> None:
     label.add(group)
 
 
-def save_pdf(args: object, df: DataFrame, indices: set[int], sheet: Sheet):
+def save_pdf(args: argparse.Namespace, df: DataFrame, indices: set[int], sheet: Sheet):
     # Add blank labels if a bias is specified
     if args.bias > 0:
         sheet.add_label(None, count=args.bias)
@@ -202,12 +209,20 @@ def save_pdf(args: object, df: DataFrame, indices: set[int], sheet: Sheet):
     print(f"{sheet.label_count} label(s) output on {sheet.page_count} page(s).")
 
 
-def main():
-    args = get_args()
+def run(args: argparse.Namespace):
     df, row_offset = get_dataframe(args.input)
     indices = get_indices(args.filter, df, row_offset)
-    sheet = get_sheet()
+    sheet = get_sheet(args.test)
     save_pdf(args, df, indices, sheet)
+    if args.launch:
+        webbrowser.open(args.output)
+
+
+def main():
+    try:
+        run(get_args())
+    except Exception as e:
+        print(f"Error: {e}")
 
 
 if __name__ == "__main__":
