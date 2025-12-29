@@ -2,7 +2,8 @@
 
 import argparse
 import webbrowser
-from pandas import DataFrame, read_excel, read_csv
+from openpyxl import load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from pathlib import Path
 from pylabels import Sheet, Specification
 from collections import namedtuple
@@ -12,9 +13,9 @@ from reportlab.graphics import shapes
 def get_args(defaults: bool = False) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="address_label",
-        description="Creates a pdf for printing address labels",
+        description="Creates a pdf for printing address labels from an Excel file.",
     )
-    parser.add_argument("-i", "--input", default="addresses.csv")
+    parser.add_argument("-i", "--input", default="addresses.xlsx")
     parser.add_argument("-o", "--output", default="labels.pdf")
     parser.add_argument("-f", "--filter", default="*", help="Ex: 'mary joe, 4-9, !5'")
     parser.add_argument("-b", "--bias", type=int, default=0, help="Count of labels to offset")
@@ -26,15 +27,15 @@ def get_args(defaults: bool = False) -> argparse.Namespace:
     return parser.parse_args()
 
 
-def get_indices(filter: str, df: DataFrame, row_offset: int) -> set[int]:
+def get_indices(filter_str: str, ws: Worksheet, row_offset: int) -> set[int]:
     # example filter "1, 5-9, !6, John Doe"
     # note that this is dependent on each filter's order. you want to first include then exclude
-    # TODO: refactor for cleaner code
     indices = set()
-    filters = filter.split(",")
+    filters = filter_str.split(",")
+    num_data_rows = ws.max_row - (row_offset - 1)
+
     for f in filters:
         invert = False
-        # nums to add to indices
         nums = set()
         f = f.strip()
         if not f:
@@ -46,15 +47,16 @@ def get_indices(filter: str, df: DataFrame, row_offset: int) -> set[int]:
             raise Exception("Invalid filter: dangling '!'")
 
         if f == "*":
-            nums.update(range(0, len(df)))
+            nums.update(range(num_data_rows))
         # filter is a name
         elif all(c.isalpha() or c.isspace() for c in f):
-            # we split the filter name and database name on spaces
-            # all filter parts must match the database parts to be added
             parts_a = [x.strip().lower() for x in f.split()]
             added_count = 0
-            for index, item in enumerate(df.iloc[:, 0]):
-                parts_b = set([x.strip().lower() for x in item.split()])
+            # Enumerate over data rows (skipping header if any)
+            for index, row in enumerate(ws.iter_rows(min_row=row_offset, values_only=True)):
+                item = str(row[0]) if row and len(row) > 0 and row[0] is not None else ""
+                # remove all commas and split
+                parts_b = set([x.strip().lower() for x in item.replace(",", "").split()])
                 match_all = True
                 for a in parts_a:
                     if a not in parts_b:
@@ -72,16 +74,18 @@ def get_indices(filter: str, df: DataFrame, row_offset: int) -> set[int]:
                 if len(parts) != 2 or not parts[0].strip().isdigit() or not parts[1].strip().isdigit():
                     raise Exception(f"Invalid index range: {f}")
                 start, end = map(int, (parts[0], parts[1]))
-                if start < row_offset or start >= len(df) + row_offset or end < row_offset or end >= len(df) + row_offset:
-                    raise Exception(f"Invalid index: {f}, out of bounds {row_offset}-{len(df) + row_offset - 1}")
+                if start < row_offset or start > ws.max_row or end < row_offset or end > ws.max_row:
+                    raise Exception(f"Invalid index: {f}, out of bounds {row_offset}-{ws.max_row}")
                 if start > end:
                     raise Exception(f"Invalid range: start > end in {f}")
+                # Convert to 0-based index relative to data start
                 nums.update(range(start - row_offset, end + 1 - row_offset))
             # filter is single number
             else:
                 num = int(f)
-                if num < row_offset or num >= len(df) + row_offset:
-                    raise Exception(f"Invalid index: {f}, out of bounds {row_offset}-{len(df) + row_offset - 1}")
+                if num < row_offset or num > ws.max_row:
+                    raise Exception(f"Invalid index: {f}, out of bounds {row_offset}-{ws.max_row}")
+                # Convert to 0-based index
                 nums.add(num - row_offset)
 
         # not a valid filter
@@ -96,20 +100,17 @@ def get_indices(filter: str, df: DataFrame, row_offset: int) -> set[int]:
     return indices
 
 
-def get_dataframe(input_path: str) -> (DataFrame, int):
-    # this funciton assumes that an excel file has a header
-    # check if path is valid
+def get_worksheet(input_path: str) -> tuple[Worksheet, int]:
     path = Path(input_path)
     if not path.is_file():
         raise FileNotFoundError(f"Input file not found at: {input_path}")
-    # if is csv read csv without header
-    if path.suffix.lower() == ".csv":
-        return read_csv(path, header=None), 1
-    # if excel then read excel
-    elif path.suffix.lower() in [".xls", ".xlsx"]:
-        return read_excel(path), 2
-    else:
-        raise ValueError(f"Unsupported file type: {path.suffix}. Please use .csv, .xls, or .xlsx files.")
+
+    if path.suffix.lower() not in [".xls", ".xlsx"]:
+        raise ValueError(f"Unsupported file type: {path.suffix}. Only .xls or .xlsx files are supported.")
+
+    wb = load_workbook(input_path)
+    # Excels are assumed to have a header, so row offset is 2
+    return wb.active, 2
 
 
 def get_sheet(test: bool) -> Sheet:
@@ -119,7 +120,6 @@ def get_sheet(test: bool) -> Sheet:
         279.4,
         3,
         10,
-        # 64,
         66.7,
         25.4,
         corner_radius=2,
@@ -134,51 +134,57 @@ def get_sheet(test: bool) -> Sheet:
     )
 
     if test:
-        return Sheet(specs, draw_address, border=True)
-    return Sheet(specs, draw_address)
+        return Sheet(specs, draw_address_old, border=True)
+    return Sheet(specs, draw_address_old)
 
 
 Address = namedtuple(
-    "Address", ["name", "name2", "street1", "street2", "city", "state", "zip"]
+    "Address", ["name", "street", "city", "state", "zip"]
 )
 
 
 def draw_address(label, width, height, address: Address | None):
-    # If the address is None, we do nothing, resulting in a blank label.
     if address is None:
         return
 
-    assert address.state, address  # nosec B101
-    assert address.zip, address  # nosec B101
-
-    # The order is flipped, because we're painting from bottom to top.
-    # The sum of the lines get .upper(), because that's what the USPS likes.
+    # Per USPS recommendations: ALL CAPS for readability.
+    # User requested not to uppercase zip, and not to remove commas yet.
+    # Lines are defined top-to-bottom for readability.
     lines = [
-        ("%s %s  %s" % (address.city, address.state, address.zip)).upper(),
-        address.street2.upper(),
-        address.street1.upper(),
-        address.name2,
-        address.name,
+        address.name.upper(),
+        address.street.upper(),
+        f"{address.city.upper()} {address.state.upper()}  {address.zip}",
     ]
 
     group = shapes.Group()
-    x, y = 0, 0
-    for line in lines:
-        if not line:
-            continue
-        shape = shapes.String(x, y, line, textAnchor="start")
-        _, _, _, y = shape.getBounds()
-        # Some extra spacing between the lines, to make it easier to read
-        y += 3
+    x_pos, y_pos = 0, 0
+
+    # Draw from bottom to top.
+    for line in reversed(lines):
+        # Use a standard 10pt font as recommended by USPS.
+        shape = shapes.String(x_pos, y_pos, line, textAnchor="start", fontName="Helvetica", fontSize=10)
         group.add(shape)
+        # Correctly advance y_pos for the next line.
+        _x1, y1, _x2, y2 = shape.getBounds()
+        line_height = y2 - y1
+        y_pos += line_height + 1.5  # Line height + 1.5pt leading
+
     _, _, lx, ly = label.getBounds()
     _, _, gx, gy = group.getBounds()
 
-    # Make sure the label fits in a sticker
-    assert gx <= lx, (address, gx, lx)  # nosec B101
-    assert gy <= ly, (address, gy, ly)  # nosec B101
+    # Calculate scale factor if text overflows.
+    scale = 1.0
+    if gx > lx:
+        scale = lx / gx
+    if gy > ly:
+        scale = min(scale, ly / gy)
 
-    # Move the content to the center of the sticker
+    if scale < 1.0:
+        group.scale(scale, scale)
+        # Recalculate bounds for centering after scaling.
+        _, _, gx, gy = group.getBounds()
+
+    # Center the group on the label.
     dx = (lx - gx) / 2
     dy = (ly - gy) / 2
     group.translate(dx, dy)
@@ -186,23 +192,73 @@ def draw_address(label, width, height, address: Address | None):
     label.add(group)
 
 
-def save_pdf(args: argparse.Namespace, df: DataFrame, indices: set[int], sheet: Sheet):
-    # Add blank labels if a bias is specified
+def draw_address_old(label, width, height, address: Address | None):
+    if address is None:
+        return
+
+    lines = [
+        (f"{address.city} {address.state}  {address.zip}").upper(),
+        address.street.upper(),
+        address.name,
+    ]
+
+    group = shapes.Group()
+    x, y = 0, 0
+    for line in lines:
+        shape = shapes.String(x, y, line, textAnchor="start", fontSize=8)
+        _, _, _, y = shape.getBounds()
+        y += 3
+        group.add(shape)
+    _, _, lx, ly = label.getBounds()
+    _, _, gx, gy = group.getBounds()
+
+    if gx > lx:
+        # raise Exception(f"Address too long, name: {address.name}")
+        print(f"Warning: Address too long, name: {address.name}")
+    if gy > ly:
+        # raise Exception(f"Address too tall, name: {address.name}")
+        print(f"Warning: Address too tall, name: {address.name}")
+
+    dx = (lx - gx) / 2
+    dy = (ly - gy) / 2
+    group.translate(dx, dy)
+
+    label.add(group)
+
+
+def save_pdf(args: argparse.Namespace, ws: Worksheet, indices: set[int], sheet: Sheet, row_offset: int):
     if args.bias > 0:
         sheet.add_label(None, count=args.bias)
 
-    # sort indices to be in order
+    def _get_cell(row_tuple, index):
+        try:
+            val = row_tuple[index]
+            return str(val).strip() if val is not None else ""
+        except IndexError:
+            return ""
+
     for i in sorted(list(indices)):
-        row = df.iloc[i].fillna("")
+        # Convert 0-based data index to 1-based worksheet row number
+        worksheet_row_num = i + row_offset
+        row_tuple = next(ws.iter_rows(min_row=worksheet_row_num, max_row=worksheet_row_num, values_only=True))
+
         address = Address(
-            name=str(row.iloc[0]).strip(),
-            name2=str(row.iloc[1]).strip(),
-            street1=str(row.iloc[2]).strip(),
-            street2=str(row.iloc[3]).strip(),
-            city=str(row.iloc[4]).strip(),
-            state=str(row.iloc[5]).strip(),
-            zip=str(row.iloc[6]).strip(),
+            name=_get_cell(row_tuple, 0),
+            street=_get_cell(row_tuple, 1),
+            city=_get_cell(row_tuple, 2),
+            state=_get_cell(row_tuple, 3),
+            zip=_get_cell(row_tuple, 4),
         )
+
+        if not any(address):
+            # print("skipping blank row")
+            continue
+
+        if not all(address):
+            name_for_warning = _get_cell(row_tuple, 0)
+            print(f"Warning: Skipping row with name: '{name_for_warning}', index: '{i + row_offset}' due to one or more missing address fields.")
+            continue
+
         sheet.add_label(address)
 
     sheet.save(args.output)
@@ -210,19 +266,20 @@ def save_pdf(args: argparse.Namespace, df: DataFrame, indices: set[int], sheet: 
 
 
 def run(args: argparse.Namespace):
-    df, row_offset = get_dataframe(args.input)
-    indices = get_indices(args.filter, df, row_offset)
+    ws, row_offset = get_worksheet(args.input)
+    indices = get_indices(args.filter, ws, row_offset)
     sheet = get_sheet(args.test)
-    save_pdf(args, df, indices, sheet)
+    save_pdf(args, ws, indices, sheet, row_offset)
     if args.launch:
         webbrowser.open(args.output)
 
 
 def main():
-    try:
-        run(get_args())
-    except Exception as e:
-        print(f"Error: {e}")
+    run(get_args())
+    # try:
+    #     run(get_args())
+    # except Exception as e:
+    #     print(f"Error: {e}")
 
 
 if __name__ == "__main__":
