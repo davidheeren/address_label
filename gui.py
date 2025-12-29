@@ -20,6 +20,7 @@ def args_or_default(args: argparse.Namespace) -> argparse.Namespace:
 def get_and_load_config() -> argparse.Namespace:
     path = Path(CONFIG_PATH)
     args = None
+    # if path.is_file():
     if path.is_file():
         with open(CONFIG_PATH, 'r') as f:
             try:
@@ -35,6 +36,10 @@ def save_config(args: argparse.Namespace):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(vars(args), f, indent=4)
 
+
+# TODO: refactor to not one giant function
+#       have better names like run and state
+# NOTE: this is my using this library or any python gui lol
 
 def main():
     run_gui()
@@ -70,31 +75,28 @@ def run_gui():
         launch_var.set(default_args.launch)
 
     def update_input_var():
-        default = Path(args.input)
-        if default.is_file():
-            dir_path = default.parent
-        else:
+        dir_path = Path(args.input).parent
+        if dir_path == Path("."):
             dir_path = Path.home()
         path = ctk.filedialog.askopenfilename(
             title="Select a File",
             filetypes=[("Data files", "*.csv *.xlsx"), ("All files", "*.*")],
-            initialdir=dir_path
+            # need starting /
+            initialdir="/" + str(dir_path)
         )
         if not path:
             return
         input_var.set(path)
 
     def update_output_var():
-        default = Path(args.output)
-        if default.is_file():
-            dir_path = default.parent
-        else:
+        dir_path = Path(args.output).parent
+        if dir_path == Path("."):
             dir_path = Path.home()
         path = ctk.filedialog.asksaveasfilename(
             title="Select a File",
             defaultextension=".pdf",
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
-            initialdir=dir_path
+            initialdir="/" + str(dir_path)
         )
         if not path:
             return
