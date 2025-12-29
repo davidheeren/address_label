@@ -5,8 +5,9 @@ import argparse
 from main import get_args, run
 from pathlib import Path
 import json
+import platformdirs
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+CONFIG_PATH = platformdirs.user_data_path("address_label_generator", ensure_exists=True) / "config.json"
 
 
 def args_or_default(args: argparse.Namespace) -> argparse.Namespace:
