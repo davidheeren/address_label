@@ -52,7 +52,7 @@ def run_gui():
     # ctk.set_default_color_theme("blue")
     app = ctk.CTk()
     app.title("Address Label Generator")
-    app.geometry("800x800")
+    app.geometry("800x900")
 
     args = get_and_load_config()
 
@@ -61,6 +61,7 @@ def run_gui():
     filter_var = ctk.StringVar(value=args.filter)
     bias_var = ctk.StringVar(value=args.bias)
     ret_var = ctk.BooleanVar(value=args.ret)
+    name_var = ctk.StringVar(value=args.name)
     test_var = ctk.BooleanVar(value=args.test)
     launch_var = ctk.BooleanVar(value=args.launch)
     tooltip_var = ctk.StringVar(value="")
@@ -72,32 +73,37 @@ def run_gui():
         filter_var.set(default_args.filter)
         bias_var.set(default_args.bias)
         ret_var.set(default_args.ret)
+        name_var.set(default_args.name)
         test_var.set(default_args.test)
         launch_var.set(default_args.launch)
 
     def update_input_var():
-        dir_path = Path(args.input).parent
+        dir_path = Path(input_var.get()).parent
         if dir_path == Path("."):
             dir_path = Path.home()
         path = ctk.filedialog.askopenfilename(
             title="Select a File",
-            filetypes=[("Data files", "*.csv *.xlsx"), ("All files", "*.*")],
+            # filetypes=[("Data files", "*.csv *.xlsx"), ("All files", "*.*")],
+            filetypes=[("Data files", "*.xlsx"), ("All files", "*.*")],
             # need starting /
-            initialdir="/" + str(dir_path)
+            # initialdir="/" + str(dir_path)
+            initialdir=str(dir_path)
         )
         if not path:
             return
         input_var.set(path)
 
     def update_output_var():
-        dir_path = Path(args.output).parent
+        dir_path = Path(output_var.get()).parent
         if dir_path == Path("."):
             dir_path = Path.home()
         path = ctk.filedialog.asksaveasfilename(
             title="Select a File",
             defaultextension=".pdf",
+            initialfile="labels",
             filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
-            initialdir="/" + str(dir_path)
+            # initialdir="/" + str(dir_path)
+            initialdir=str(dir_path)
         )
         if not path:
             return
@@ -119,8 +125,9 @@ def run_gui():
             input=input_var.get(),
             output=output_var.get(),
             filter=filter_var.get(),
-            bias=int(bias_var.get()),
+            bias=int(bias_var.get()) if bias_var.get() else 0,
             ret=ret_var.get(),
+            name=name_var.get(),
             test=test_var.get(),
             launch=launch_var.get(),
         )
@@ -147,7 +154,7 @@ def run_gui():
     input_frame.grid(row=0, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     input_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     input_frame.bind("<Leave>", on_frame_leave)
-    input_frame.bind("<Enter>", lambda e: on_frame_enter("<Input> An Excel or csv file that holds the address data"))
+    input_frame.bind("<Enter>", lambda e: on_frame_enter("<Input> An Excel file that holds the address data"))
 
     input_header = ctk.CTkLabel(input_frame, text="Input")
     input_header.grid(row=0, column=0, columnspan=1, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
@@ -176,7 +183,7 @@ def run_gui():
     filter_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     filter_frame.bind("<Leave>", on_frame_leave)
     filter_frame.bind("<Enter>", lambda e: tooltip_var.set(
-        """<Filter> Chose which rows from the data to include by order
+        """<Filter> Chose which rows from the data to include by order, seperated by commas
 * -> all rows
 3 -> single row index
 4-9 -> range of row indices
@@ -194,7 +201,7 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
     bias_frame.grid(row=3, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     bias_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     bias_frame.bind("<Leave>", on_frame_leave)
-    bias_frame.bind("<Enter>", lambda e: tooltip_var.set("<Bias> Number of labels to skip before printing. This is for partially used label papers"))
+    bias_frame.bind("<Enter>", lambda e: tooltip_var.set("<Bias> Number of labels to skip before printing. This is for partially used label sheets"))
 
     bias_header = ctk.CTkLabel(bias_frame, text="Bias")
     bias_header.grid(row=0, column=0, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
@@ -206,14 +213,26 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
     ret_frame.grid(row=4, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     ret_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     ret_frame.bind("<Leave>", on_frame_leave)
-    ret_frame.bind("<Enter>", lambda e: tooltip_var.set("<Ret> Prints your address the same number of filtered rows"))
+    ret_frame.bind("<Enter>", lambda e: tooltip_var.set("<Ret> Prints your return address for each label"))
 
     ret_widget = ctk.CTkCheckBox(ret_frame, text="Ret", variable=ret_var)
     ret_widget.grid(row=1, column=0, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
 
+    # --- Name Frame ---
+    name_frame = ctk.CTkFrame(app)
+    name_frame.grid(row=5, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
+    name_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
+    name_frame.bind("<Leave>", on_frame_leave)
+    name_frame.bind("<Enter>", lambda e: tooltip_var.set("<Name> Your name. This specifies which return address to use if the 'Ret' option is enabled. This will remove the row as well"))
+
+    name_header = ctk.CTkLabel(name_frame, text="Name")
+    name_header.grid(row=0, column=0, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
+    name_widget = ctk.CTkEntry(name_frame, textvariable=name_var)
+    name_widget.grid(row=1, column=0, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
+
     # --- Test Frame ---
     test_frame = ctk.CTkFrame(app)
-    test_frame.grid(row=5, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
+    test_frame.grid(row=6, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     test_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     test_frame.bind("<Leave>", on_frame_leave)
     test_frame.bind("<Enter>", lambda e: tooltip_var.set("<Test> Adds a box line around the labels"))
@@ -223,7 +242,7 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
 
     # --- Launch Frame ---
     launch_frame = ctk.CTkFrame(app)
-    launch_frame.grid(row=6, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
+    launch_frame.grid(row=7, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     launch_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
     launch_frame.bind("<Leave>", on_frame_leave)
     launch_frame.bind("<Enter>", lambda e: tooltip_var.set("<Launch> Opens the output pdf in the browser when its created"))
@@ -233,7 +252,7 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
 
     # --- Task Frame ---
     task_frame = ctk.CTkFrame(app)
-    task_frame.grid(row=7, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
+    task_frame.grid(row=8, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     task_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE / 2)
     task_frame.grid_columnconfigure(1, weight=1, minsize=MIN_FRAME_SIZE / 2)
     # task_frame.grid_columnconfigure(0, weight=1)
@@ -246,7 +265,7 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
 
     # --- Tooltip Frame ---
     tooltip_frame = ctk.CTkFrame(app)
-    tooltip_frame.grid(row="8", column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
+    tooltip_frame.grid(row="9", column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
     tooltip_frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
 
     tooltip_widget = ctk.CTkLabel(tooltip_frame, textvariable=tooltip_var, justify="left")
