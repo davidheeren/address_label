@@ -198,11 +198,14 @@ def draw_address(label, width, height, address: Address | None):
         print(f"Warning: Skipping line with invalid name '{address.last_name1} {address.first_name1} {address.last_name2} {address.first_name2}'")
         return
 
+    street = address.address1
+    if address.address2:
+        street = address.address2
+
     lines = [
-        address.country,
+        address.country.upper() if address.country else None,
         f"{address.city} {address.state}  {address.zip}".upper(),
-        address.address1.upper(),
-        address.address2.upper() if address.address2 else None,
+        street.upper(),
         name,
     ]
 
