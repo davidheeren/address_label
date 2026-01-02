@@ -11,6 +11,7 @@ CONFIG_PATH = platformdirs.user_data_path("address_label_generator", ensure_exis
 
 
 def args_or_default(args: Namespace) -> Namespace:
+    """Takes an args and sets any values it doesn't have to default"""
     default_args = get_args(True)
     if args is None:
         return default_args
@@ -19,6 +20,7 @@ def args_or_default(args: Namespace) -> Namespace:
 
 
 def load_args_from_config() -> Namespace:
+    """Returns args from config file"""
     path = Path(CONFIG_PATH)
     args = None
     # if path.is_file():
@@ -34,14 +36,10 @@ def load_args_from_config() -> Namespace:
 
 
 def save_config(args: Namespace):
+    """Saves args as a json file"""
     with open(CONFIG_PATH, 'w') as f:
         json.dump(vars(args), f, indent=4)
 
-
-# TODO: refactor to not one giant function
-#       have better names like run and state
-# NOTE: this is my using this library or any python gui lol
-# NAMING: args -> underlying data structure, config -> config file, options -> gui values
 
 def main():
     args = load_args_from_config()

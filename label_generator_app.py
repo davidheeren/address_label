@@ -6,6 +6,8 @@ from typing import Callable
 from main import get_args
 from label_generator import LabelGenerator
 
+# NOTE: this is my using this library or any python gui lol
+
 OUTER_PADX = 20
 OUTER_PADY = 10
 INNER_PADX = 5
@@ -47,14 +49,16 @@ class LabelGeneratorApp:
         self._setup_tooltip_bar()
 
     def _create_root(self) -> ctk.CTk:
+        """Creates CTK root and sets vars"""
         ctk.set_appearance_mode("dark")
-        ctk.set_widget_scaling(1.25)
+        ctk.set_widget_scaling(1)
         root = ctk.CTk()
         root.title("Address Label Generator")
         root.geometry("800x900")
         return root
 
-    def _set_options(self, args):
+    def _set_options(self, args: Namespace):
+        """Sets the option variable from an args"""
         self.input_var.set(args.input)
         self.output_var.set(args.output)
         self.filter_var.set(args.filter)
@@ -65,6 +69,7 @@ class LabelGeneratorApp:
         self.launch_var.set(args.launch)
 
     def _get_args_from_options(self) -> Namespace:
+        """Returns args from the options"""
         return Namespace(
             input=self.input_var.get(),
             output=self.output_var.get(),
@@ -77,6 +82,7 @@ class LabelGeneratorApp:
         )
 
     def _generate_pdf(self):
+        """Actually generates the PDF and saves the options config"""
         args = self._get_args_from_options()
         try:
             label_generator = LabelGenerator(args)
@@ -87,6 +93,7 @@ class LabelGeneratorApp:
         self.save_options_func(args)
 
     def _update_input_var(self):
+        """Gets input path from the user"""
         dir_path = Path(self.input_var.get()).parent
         if dir_path == Path("."):
             dir_path = Path.home()
@@ -101,6 +108,7 @@ class LabelGeneratorApp:
         self.input_var.set(path)
 
     def _update_output_var(self):
+        """Gets the output path from the user"""
         dir_path = Path(self.output_var.get()).parent
         if dir_path == Path("."):
             dir_path = Path.home()
@@ -119,6 +127,7 @@ class LabelGeneratorApp:
         return new_text == "" or new_text.isdigit()
 
     def _create_frame(self, tooltip_str: str | None) -> ctk.CTkFrame:
+        """Creates a frame class with a tooltip"""
         frame = ctk.CTkFrame(self.root)
         frame.grid(row=self.frame_row, column=0, padx=OUTER_PADX, pady=OUTER_PADY, sticky="w")
         frame.grid_columnconfigure(0, weight=1, minsize=MIN_FRAME_SIZE)
@@ -128,12 +137,15 @@ class LabelGeneratorApp:
         self.frame_row += 1
         return frame
 
+    # Top left
     def _set_grid_top(self, base: ctk.CTkBaseClass):
         base.grid(row=0, column=0, columnspan=1, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
 
+    # Bottom Left
     def _set_grid_bottom(self, base: ctk.CTkBaseClass):
         base.grid(row=1, column=0, padx=INNER_PADX, pady=INNER_PADY, sticky="w")
 
+    # Bottom Right
     def _set_grid_right(self, base: ctk.CTkBaseClass):
         base.grid(row=1, column=1, padx=INNER_PADX, pady=INNER_PADY, sticky="e")
 
@@ -220,5 +232,6 @@ Ex: '*, !5-20, !john, 15' -> adds all rows, removes range 5-10, removes all john
         self._set_grid_bottom(tooltip_widget)
 
     def mainloop(self):
+        """Runs the app and saves options config on end"""
         self.root.mainloop()
         self.save_options_func(self._get_args_from_options())

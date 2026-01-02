@@ -167,6 +167,7 @@ class LabelGenerator:
 
         return indices, name_idx
 
+    # Makes the method not take self as a parameter
     @staticmethod
     def _draw_address(label, width, height, address: Address | None):
         """Draws an address to a label"""
