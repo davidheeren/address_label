@@ -15,6 +15,8 @@ INNER_PADY = 5
 MIN_FRAME_SIZE = 500
 BUTTON_WIDTH = 75
 
+UI_SCALE = 1
+
 
 class LabelGeneratorApp:
     def __init__(self, inital_args: Namespace, save_options_func: Callable[[Namespace], None]):
@@ -51,7 +53,7 @@ class LabelGeneratorApp:
     def _create_root(self) -> ctk.CTk:
         """Creates CTK root and sets vars"""
         ctk.set_appearance_mode("dark")
-        ctk.set_widget_scaling(1)
+        ctk.set_widget_scaling(UI_SCALE)
         root = ctk.CTk()
         root.title("Address Label Generator")
         root.geometry("800x900")
